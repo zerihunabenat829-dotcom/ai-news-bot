@@ -8,10 +8,6 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
 def get_crypto_news():
-    # ከጉግል ዜና ላይ ትኩስ መረጃዎችን መፈለጊያ (World News)
-    url = "https://newsapi.org/v2/everything?q=World+News&sortBy=publishedAt&apiKey=YOUR_NEWS_API_KEY"
-    # ማሳሰቢያ፦ የNewsAPI ቁልፍ ከሌለህ በቀጥታ ከሕዝባዊ RSS Feed ማምጣት ይቻላል።
-    # ለፈጣን ሙከራ ይህንን ነፃ የዜና ሊንክ እንጠቀም፡
     test_url = "https://api.spaceflightnewsapi.net/v4/articles/?limit=1"
     try:
         response = requests.get(test_url).json()
@@ -24,7 +20,7 @@ def get_crypto_news():
 def translate_and_summarize(text):
     client = Groq(api_key=GROQ_API_KEY)
     completion = client.chat.completions.create(
-        model="llama-3.3-70b-specdec" 
+        model="llama-3.3-70b-specdec",
         messages=[
             {"role": "system", "content": "You are a professional news translator. Translate the given news into Amharic and make it short and engaging for Telegram."},
             {"role": "user", "content": text}
