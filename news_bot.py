@@ -9,53 +9,74 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-def get_news_from_feed(url, limit=4):
+def fetch_fast_news(url, fallback_query, limit=3):
+    headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
     try:
-        response = requests.get(url)
+        # መዘግየትን ለማስቀረት በቀጥታ ከምንጩ በፈጣን ሰከንድ እንዲያመጣ ማድረግ
+        response = requests.get(url, headers=headers, timeout=10)
         root = ET.fromstring(response.content)
         items = []
         for item in root.findall('.//item')[:limit]:
             title = item.find('title').text
-            items.append(title)
-        return items
+            if title:
+                # የጋዜጣውን ስም ከዜናው መጨረሻ ላይ ቀንሶ ንፁህ ዜና ብቻ ለማስቀረት
+                clean_title = title.split(" - ")[0].strip()
+                items.append(clean_title)
+        if items:
+            return items
     except Exception as e:
-        print(f"Error fetching feed: {e}")
+        print(f"Fast fetch failed, using alternative for {fallback_query}: {e}")
+    
+    # የመጀመሪያው ሊንክ ቢዘገይ ወዲያውኑ ወደ ሁለተኛው አማራጭ ፈጣን ሊንክ ይቀይራል
+    try:
+        alt_url = f"https://news.google.com/rss/search?q={fallback_query}&hl=en-US&gl=US&ceid=US:en"
+        res = requests.get(alt_url, headers=headers, timeout=10)
+        root = ET.fromstring(res.content)
+        return [item.find('title').text.split(" - ")[0].strip() for item in root.findall('.//item')[:limit]]
+    except:
         return []
 
 if __name__ == "__main__":
-    # 1. የአጠቃላይ የዓለም ዜናዎችን ማምጣት
-    world_url = "https://news.google.com/rss/search?q=world+news&hl=en-US&gl=US&ceid=US:en"
-    world_news = get_news_from_feed(world_url, limit=3)
+    print("Fetching fresh live data...")
     
-    # 2. የዋና ዋና ስፖርት ዜናዎችን እና ውጤቶችን ማምጣት
-    sports_url = "https://news.google.com/rss/search?q=sports+news+live+scores&hl=en-US&gl=US&ceid=US:en"
-    sports_news = get_news_from_feed(sports_url, limit=3)
+    # 1. የዓለም ትኩስ ዜናዎችን በቀጥታ ከ Reuters / BBC ፈጣን ሊንክ ማምጣት
+    world_news = fetch_fast_news("https://news.google.com/rss/sections/ certain/CAAqJggKIiBDQkFTRWdvSUwyMHZNRGx1YVNoR0FtdHZZbW9uWkd4U0FpQVAB?hl=en-US&gl=US&ceid=US:en", "breaking+world+news", limit=3)
     
-    # 3. የሥራ ማስታወቂያዎችን ማምጣት (Jobs in Ethiopia / Vacancies)
-    jobs_url = "https://news.google.com/rss/search?q=jobs+in+ethiopia+vacancies&hl=en-US&gl=US&ceid=US:en"
-    job_announcements = get_news_from_feed(jobs_url, limit=3)
+    # 2. ትኩስ የስፖርት ዜናዎችን እና ውጤቶችን ማምጣት
+    sports_news = fetch_fast_news("https://news.google.com/rss/search?q=football+news+transfers+scores&hl=en-US&gl=US&ceid=US:en", "football+sports+scores", limit=3)
+    
+    # 3. የሥራ ማስታወቂያዎችን ማምጣት
+    job_vacancies = fetch_fast_news("https://news.google.com/rss/search?q=jobs+in+ethiopia+vacancies&hl=en-US&gl=US&ceid=US:en", "ethiopia+jobs", limit=3)
     
     # መረጃዎቹን ማጣመር
-    combined_text = (
-        "WORLD NEWS:\n" + " | ".join(world_news) + 
-        "\n\nSPORTS NEWS & SCORES:\n" + " | ".join(sports_news) +
-        "\n\nJOB VACANCIES / ANNOUNCEMENTS:\n" + " | ".join(job_announcements)
-    )
-    
-    # በ Groq AI አማካኝነት ዜናውን ማስዋብ
+    combined_updates = ""
+    if world_news:
+        combined_updates += "🔴 BREAKING WORLD NEWS:\n" + "\n".join([f"- {n}" for n in world_news]) + "\n\n"
+    if sports_news:
+        combined_updates += "⚽ LIVE SPORTS & TRANSFERS:\n" + "\n".join([f"- {s}" for n in sports_news]) + "\n\n"
+    if job_vacancies:
+        combined_updates += "💼 LATEST JOB VACANCIES:\n" + "\n".join([f"- {j}" for j in job_vacancies])
+
+    if not combined_updates:
+        combined_updates = "🔄 Updating live feeds... Check back in a moment for fresh news!"
+
+    # በ Groq AI አማካኝነት ዜናውን እጅግ ማራኪ እና ፈጣን በሆነ ቅርፅ ማዘጋጀት
     client = Groq(api_key=GROQ_API_KEY)
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
-            {"role": "system", "content": "You are a professional news anchor. Take the given world news, sports headlines/scores, and job vacancies, and format them into a clean, highly engaging daily updates channel post in English. Use 3 distinct sections: 1. World News Update, 2. Sports News & Live Scores, 3. Daily Job Vacancies. Use clear bullet points, professional emojis for each section, and bold text for titles or key terms. Do not use Amharic."},
-            {"role": "user", "content": combined_text}
+            {
+                "role": "system", 
+                "content": "You are an elite, real-time breaking news bot. Format the provided headlines into an ultra-modern, clean, and highly professional Telegram channel post in English. Use bold headers, clean bullet points, and dynamic emojis. Do not summarize into long paragraphs; keep the headlines sharp and instant. Do not use Amharic."
+            },
+            {"role": "user", "content": combined_updates}
         ]
     )
     
-    final_message = completion.choices[0].message.content
+    live_message = completion.choices[0].message.content
     
-    # ወደ ቴሌግራም መላክ
+    # ወዲያውኑ ወደ ቴሌግራም መላክ
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": final_message, "parse_mode": "Markdown"}
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": live_message, "parse_mode": "Markdown"}
     requests.post(telegram_url, json=payload)
-    print("Combined World, Sports, and Job news sent successfully!")
+    print("Ultra-fast live update successfully posted to Telegram!")
