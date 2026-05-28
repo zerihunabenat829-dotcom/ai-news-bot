@@ -1,5 +1,7 @@
+
 import os
 import requests
+import xml.etree.ElementTree as ET
 from groq import Groq
 
 # ኮንፊገሬሽን
@@ -7,22 +9,31 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-def get_crypto_news():
-    test_url = "https://api.spaceflightnewsapi.net/v4/articles/?limit=1"
+def get_daily_world_news():
+    # በየ24 ሰዓቱ የሚታደሰውን የጉግል ዜና (Google News RSS Feed) በቀጥታ መጠቀም
+    rss_url = "https://news.google.com/rss/search?q=world+news&hl=en-US&gl=US&ceid=US:en"
     try:
-        response = requests.get(test_url).json()
-        if response and 'results' in response:
-            article = response['results'][0]
-            return f"Title: {article['title']}\nSummary: {article['summary']}"
-    except:
-        return "No new international news found at this moment."
+        response = requests.get(rss_url)
+        root = ET.fromstring(response.content)
+        
+        # የመጀመሪያዎቹን 2 ወይም 3 ዋና ዋና ዜናዎች ሰብስቦ ለማምጣት
+        news_items = []
+        for item in root.findall('.//item')[:2]:
+            title = item.find('title').text
+            news_items.append(title)
+            
+        if news_items:
+            return " | ".join(news_items)
+    except Exception as e:
+        print(f"Error fetching Google News: {e}")
+    return None
 
 def translate_and_summarize(text):
     client = Groq(api_key=GROQ_API_KEY)
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
-            {"role": "system", "content": "You are a professional news translator. Translate the given news into Amharic and make it short and engaging for Telegram."},
+            {"role": "system", "content": "You are a professional news anchor. Take the given world news headlines, summarize them clearly into a single daily update in Amharic, and format it beautifully for a Telegram channel using emojis."},
             {"role": "user", "content": text}
         ]
     )
@@ -34,10 +45,10 @@ def send_to_telegram(message):
     requests.post(url, json=payload)
 
 if __name__ == "__main__":
-    raw_news = get_crypto_news()
-    if raw_news and "No new" not in raw_news:
-        amharic_news = translate_and_summarize(raw_news)
-        send_to_telegram(amharic_news)
-        print("News sent successfully!")
+    daily_news = get_daily_world_news()
+    if daily_news:
+        amharic_summary = translate_and_summarize(daily_news)
+        send_to_telegram(amharic_summary)
+        print("Daily news update sent successfully!")
     else:
-        print("No new news found to process.")
+        print("No news found for the last 24 hours.")
