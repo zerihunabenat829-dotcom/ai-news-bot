@@ -29,17 +29,25 @@ if __name__ == "__main__":
     
     # 2. የዋና ዋና ስፖርት ዜናዎችን እና ውጤቶችን ማምጣት
     sports_url = "https://news.google.com/rss/search?q=sports+news+live+scores&hl=en-US&gl=US&ceid=US:en"
-    sports_news = get_news_from_feed(sports_url, limit=4)
+    sports_news = get_news_from_feed(sports_url, limit=3)
+    
+    # 3. የሥራ ማስታወቂያዎችን ማምጣት (Jobs in Ethiopia / Vacancies)
+    jobs_url = "https://news.google.com/rss/search?q=jobs+in+ethiopia+vacancies&hl=en-US&gl=US&ceid=US:en"
+    job_announcements = get_news_from_feed(jobs_url, limit=3)
     
     # መረጃዎቹን ማጣመር
-    combined_text = "WORLD NEWS:\n" + " | ".join(world_news) + "\n\nSPORTS NEWS & SCORES:\n" + " | ".join(sports_news)
+    combined_text = (
+        "WORLD NEWS:\n" + " | ".join(world_news) + 
+        "\n\nSPORTS NEWS & SCORES:\n" + " | ".join(sports_news) +
+        "\n\nJOB VACANCIES / ANNOUNCEMENTS:\n" + " | ".join(job_announcements)
+    )
     
     # በ Groq AI አማካኝነት ዜናውን ማስዋብ
     client = Groq(api_key=GROQ_API_KEY)
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
-            {"role": "system", "content": "You are a professional news and sports anchor. Take the given world news and sports headlines/scores and format them into a clean, highly engaging daily news update in English. Use separate sections for World News and Sports News. Use clear bullet points, soccer/sports emojis, and bold text for team names or key scores. Do not use Amharic."},
+            {"role": "system", "content": "You are a professional news anchor. Take the given world news, sports headlines/scores, and job vacancies, and format them into a clean, highly engaging daily updates channel post in English. Use 3 distinct sections: 1. World News Update, 2. Sports News & Live Scores, 3. Daily Job Vacancies. Use clear bullet points, professional emojis for each section, and bold text for titles or key terms. Do not use Amharic."},
             {"role": "user", "content": combined_text}
         ]
     )
@@ -50,4 +58,4 @@ if __name__ == "__main__":
     telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     payload = {"chat_id": TELEGRAM_CHAT_ID, "text": final_message, "parse_mode": "Markdown"}
     requests.post(telegram_url, json=payload)
-    print("Combined World and Sports news sent successfully!")
+    print("Combined World, Sports, and Job news sent successfully!")
