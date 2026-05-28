@@ -9,46 +9,45 @@ GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 
-def get_daily_world_news():
-    # በየ24 ሰዓቱ የሚታደሰውን የጉግል ዜና (Google News RSS Feed) መጠቀም
-    rss_url = "https://news.google.com/rss/search?q=world+news&hl=en-US&gl=US&ceid=US:en"
+def get_news_from_feed(url, limit=4):
     try:
-        response = requests.get(rss_url)
+        response = requests.get(url)
         root = ET.fromstring(response.content)
-        
-        # የባለፉትን 24 ሰዓታት 5 ዋና ዋና ዜናዎችን ሰብስቦ ለማምጣት
-        news_items = []
-        for item in root.findall('.//item')[:5]:
+        items = []
+        for item in root.findall('.//item')[:limit]:
             title = item.find('title').text
-            news_items.append(title)
-            
-        if news_items:
-            return " | ".join(news_items)
+            items.append(title)
+        return items
     except Exception as e:
-        print(f"Error fetching Google News: {e}")
-    return None
+        print(f"Error fetching feed: {e}")
+        return []
 
-def summarize_in_english(text):
+if __name__ == "__main__":
+    # 1. የአጠቃላይ የዓለም ዜናዎችን ማምጣት
+    world_url = "https://news.google.com/rss/search?q=world+news&hl=en-US&gl=US&ceid=US:en"
+    world_news = get_news_from_feed(world_url, limit=3)
+    
+    # 2. የዋና ዋና ስፖርት ዜናዎችን እና ውጤቶችን ማምጣት
+    sports_url = "https://news.google.com/rss/search?q=sports+news+live+scores&hl=en-US&gl=US&ceid=US:en"
+    sports_news = get_news_from_feed(sports_url, limit=4)
+    
+    # መረጃዎቹን ማጣመር
+    combined_text = "WORLD NEWS:\n" + " | ".join(world_news) + "\n\nSPORTS NEWS & SCORES:\n" + " | ".join(sports_news)
+    
+    # በ Groq AI አማካኝነት ዜናውን ማስዋብ
     client = Groq(api_key=GROQ_API_KEY)
     completion = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=[
-            {"role": "system", "content": "You are a professional news anchor. Take the given world news headlines from the last 24 hours and format them into a clean, professional daily news update in English. Use clear bullet points and emojis. Do not translate to Amharic."},
-            {"role": "user", "content": text}
+            {"role": "system", "content": "You are a professional news and sports anchor. Take the given world news and sports headlines/scores and format them into a clean, highly engaging daily news update in English. Use separate sections for World News and Sports News. Use clear bullet points, soccer/sports emojis, and bold text for team names or key scores. Do not use Amharic."},
+            {"role": "user", "content": combined_text}
         ]
     )
-    return completion.choices[0].message.content
-
-def send_to_telegram(message):
-    url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": message, "parse_mode": "Markdown"}
-    requests.post(url, json=payload)
-
-if __name__ == "__main__":
-    daily_news = get_daily_world_news()
-    if daily_news:
-        english_summary = summarize_in_english(daily_news)
-        send_to_telegram(english_summary)
-        print("Daily English news update sent successfully!")
-    else:
-        print("No news found for the last 24 hours.")
+    
+    final_message = completion.choices[0].message.content
+    
+    # ወደ ቴሌግራም መላክ
+    telegram_url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
+    payload = {"chat_id": TELEGRAM_CHAT_ID, "text": final_message, "parse_mode": "Markdown"}
+    requests.post(telegram_url, json=payload)
+    print("Combined World and Sports news sent successfully!")
