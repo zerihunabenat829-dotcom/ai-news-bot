@@ -24,7 +24,7 @@ def get_crypto_news():
 def translate_and_summarize(text):
     client = Groq(api_key=GROQ_API_KEY)
     completion = client.chat.completions.create(
-        model="llama3-8b-8192",
+        ,model="llama-3.3-70b-specdec" 
         messages=[
             {"role": "system", "content": "You are a professional news translator. Translate the given news into Amharic and make it short and engaging for Telegram."},
             {"role": "user", "content": text}
